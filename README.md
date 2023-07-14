@@ -4,7 +4,7 @@ This package includes the code for [RAMP: Hierarchical Reactive Motion Planning 
 
 For simulation demonstrations, we use the [Isaac Gym](https://developer.nvidia.com/isaac-gym) physics simulation environment from NVIDIA, as well as modified environment generation code from [SceneCollisionNet](https://github.com/NVlabs/SceneCollisionNet), included in the [sim_env](sim_env) folder. For the computation of differentiable forward kinematics, the package uses [differentiable-robot-model](https://github.com/facebookresearch/differentiable-robot-model) from Meta Research.
 
-For more information, please check our [project page](github.com/SamsungLabs/RAMP-project-page).
+For more information, please check our [project page](https://samsunglabs.github.io/RAMP-project-page/).
 
 ## Installation and running
 
