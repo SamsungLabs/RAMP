@@ -1,0 +1,12 @@
+__pycache__
+pyvenv
+weights
+extern/isaacgym
+datasets/scene_cache
+build
+*.egg
+*egg-info
+*.tar
+*.zip
+*.pth
+*.pyc
