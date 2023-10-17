@@ -1,10 +1,16 @@
 # RAMP
 
+*Vasileios Vasilopoulos*, *Suveer Garg*, *Pedro Piacenza*, *Jinwook Huh*, *Volkan Isler*
+
+[**Paper**](https://arxiv.org/abs/2305.10534) | [**Project page**](https://samsunglabs.github.io/RAMP-project-page/)
+
 This package includes the code for [RAMP: Hierarchical Reactive Motion Planning for Manipulation Tasks Using Implicit Signed Distance Functions](https://arxiv.org/abs/2305.10534), developed by Samsung Research (Samsung AI Center - New York) and presented at IROS 2023.
 
-For simulation demonstrations, we use the [Isaac Gym](https://developer.nvidia.com/isaac-gym) physics simulation environment from NVIDIA, as well as modified environment generation code from [SceneCollisionNet](https://github.com/NVlabs/SceneCollisionNet), included in the [sim_env](sim_env) folder. For the computation of differentiable forward kinematics, the package uses [differentiable-robot-model](https://github.com/facebookresearch/differentiable-robot-model) from Meta Research.
+![Pipeline](misc/architecture.png)
 
-For more information, please check our [project page](https://samsunglabs.github.io/RAMP-project-page/).
+---
+
+For simulation demonstrations, we use the [Isaac Gym](https://developer.nvidia.com/isaac-gym) physics simulation environment from NVIDIA, as well as modified environment generation code from [SceneCollisionNet](https://github.com/NVlabs/SceneCollisionNet), included in the [sim_env](sim_env) folder. For the computation of differentiable forward kinematics, the package uses [differentiable-robot-model](https://github.com/facebookresearch/differentiable-robot-model) from Meta Research.
 
 ## Installation and running
 
