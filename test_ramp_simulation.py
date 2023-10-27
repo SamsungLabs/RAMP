@@ -27,6 +27,7 @@ from trajectory_following.trajectory_following import (
     LINK_SKELETON,
     JOINT_LIMITS,
     robot_urdf_location,
+    control_points_location,
     TrajectoryFollower,
 )
 from sim_env.constants import ROBOT_LABEL, START_SPHERE_LABEL, GOAL_SPHERE_LABEL
@@ -110,6 +111,7 @@ if __name__ == "__main__":
     trajectory_follower = TrajectoryFollower(
         joint_limits = JOINT_LIMITS,
         robot_urdf_location = robot_urdf_location,
+        control_points_json = control_points_location,
         link_fixed = LINK_FIXED,
         link_ee = LINK_EE,
         link_skeleton = LINK_SKELETON,

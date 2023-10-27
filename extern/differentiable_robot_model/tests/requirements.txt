@@ -1,3 +1,0 @@
-# packages required for tests only
-pybullet ==3.0.8
-pytest ==6.2.2

@@ -31,8 +31,8 @@ from mppi_planning.cost import PathLengthCost, CollisionCost, ConvergenceCost, M
 # Import C-SDF
 from csdf.pointcloud_sdf import PointCloud_CSDF
 
-# Import differentiable-robot-model functionality
-from differentiable_robot_model.robot_model import DifferentiableRobotModel
+# Import pytorch-kinematics functionality
+import pytorch_kinematics as pk
 
 log = logging.getLogger('MPPI TRAJECTORY PLANNING')
 
@@ -43,6 +43,7 @@ class TrajectoryPlanner:
         joint_limits: List[np.ndarray],
         robot_urdf_location: str = 'resources/panda/panda.urdf',
         scene_urdf_location: str = 'resources/environment/environment.urdf',
+        control_points_location: str = 'resources/panda_control_points/control_points.json',
         link_fixed: str = 'fixed_link',
         link_ee: str = 'ee_link',
         link_skeleton: List[str] = ['fixed_link','ee_link'],
@@ -51,6 +52,9 @@ class TrajectoryPlanner:
     ): 
         # Define robot's number of DOF
         self._njoints = joint_limits[0].shape[0]
+
+        # Control points location
+        self._control_points_location = control_points_location
 
         # Define number of control points
         self._control_points_number = control_points_number
@@ -70,10 +74,9 @@ class TrajectoryPlanner:
         # Default gripper state - set to [0.0, 0.0]
         self._gripper_state = torch.Tensor([0.0, 0.0]).to(self._device)
 
-        # Set up differentiable robot model
-        self.differentiable_model = DifferentiableRobotModel(robot_urdf_location, "robot", device=self._device)
-        self.differentiable_model.eval()
-        self.differentiable_model.to(self._device)
+        # Set up differentiable FK
+        self.differentiable_model = pk.build_serial_chain_from_urdf(open(robot_urdf_location).read(), self._link_ee)
+        self.differentiable_model = self.differentiable_model.to(dtype = torch.double, device = self._device)
         
         # Set up C-SDF - Initialize with a random point cloud
         self.csdf = PointCloud_CSDF(np.random.rand(100000,3), device=self._device)
@@ -127,7 +130,6 @@ class TrajectoryPlanner:
         with torch.no_grad():
             cost_path_length = self._cost_path_length.forward(state, action)
             cost_collision = self._cost_collision.forward(state, self._grasped_object_nominal_control_points, self._grasped_object_grasp_T_object) if self._consider_obstacle_collisions else 0.0
-            # cost_manipulability = self._cost_manipulability.forward(state)
         
         # Evaluate cost
         cost = cost_path_length + cost_collision
@@ -163,10 +165,8 @@ class TrajectoryPlanner:
         mppi_covariance: float = 0.5,
         mppi_lambda: float = 1.0,
         mppi_cost_weight_convergence = 1000.0,
-        mppi_cost_weight_path_length = 100.0,
-        mppi_cost_weight_collision = 1000.0,
-        mppi_cost_weight_self_collision = 500.0,
-        mppi_cost_weight_manipulability = 1.0,
+        mppi_cost_weight_path_length = 200.0,
+        mppi_cost_weight_collision = 500.0,
         mppi_consider_obstacle_collisions: bool = True,
     ) -> List:
         
@@ -180,9 +180,8 @@ class TrajectoryPlanner:
         :param mppi_covariance: Control noise covariance value
         :param mppi_lambda: Temperature, positive scalar where larger values will allow more exploration
         :param mppi_cost_weight_convergence: Weight for target convergence cost
+        :param mppi_cost_weight_path_length: Weight for path length cost
         :param mppi_cost_weight_collision: Weight for collision cost
-        :param mppi_cost_weight_self_collision: Weight for self-collision cost
-        :param mppi_cost_weight_manipulability: Weight for manipulability cost
         :param mppi_consider_obstacle_collisions: True if collisions with obstacles need to be checked, False otherwise
         :returns: The target joint angles (ROBOT_DOF)
         """
@@ -194,8 +193,6 @@ class TrajectoryPlanner:
         self._mppi_cost_weight_convergence = mppi_cost_weight_convergence
         self._mppi_cost_weight_path_length = mppi_cost_weight_path_length
         self._mppi_cost_weight_collision = mppi_cost_weight_collision
-        self._mppi_cost_weight_self_collision = mppi_cost_weight_self_collision
-        self._mppi_cost_weight_manipulability = mppi_cost_weight_manipulability
 
         # Store start and goal configurations
         self._start = np.array(start_ja)
@@ -233,16 +230,7 @@ class TrajectoryPlanner:
             link_fixed = self._link_fixed,
             link_skeleton = self._link_skeleton,
             gripper_state = self._gripper_state,
-            device = self._device,
-        )
-                
-        # 3) Manipulability cost
-        self._cost_manipulability = ManipulabilityCost(
-            weight = self._mppi_cost_weight_manipulability,
-            ndofs = self._njoints,
-            differentiable_model = self.differentiable_model,
-            link_ee = self._link_ee,
-            gripper_state = self._gripper_state,
+            control_points_json = self._control_points_location,
             device = self._device,
         )
 

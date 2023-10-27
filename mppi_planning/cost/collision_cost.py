@@ -2,6 +2,7 @@
 # MIT License
 #
 # Copyright (c) 2020-2021 NVIDIA CORPORATION.
+# Modified by: Vasileios Vasilopoulos (vasileios.v@samsung.com)
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -24,6 +25,7 @@ import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as Functional
+import json
 
 from .gaussian_projection import GaussianProjection
 
@@ -37,7 +39,8 @@ class CollisionCost(nn.Module):
         link_fixed: str,
         link_skeleton: str,
         gripper_state: torch.Tensor,
-        distance_threshold: float = 0.03,
+        control_points_json: str = None,
+        distance_threshold: float = 0.02,
         gaussian_params: dict = {'n':0,'c':0,'s':0,'r':0},
         device: torch.device = torch.device('cpu'),
         float_dtype: torch.dtype = torch.float32,
@@ -56,8 +59,26 @@ class CollisionCost(nn.Module):
         self._link_fixed = link_fixed
         self._link_skeleton = link_skeleton
         self._gripper_state = gripper_state
+        self._control_points_json = control_points_json
+
+        try:
+            if self._control_points_json is not None:
+                with open(control_points_json, "rt") as json_file:
+                    control_points = json.load(json_file)
+
+                # Write control point locations in link frames as transforms
+                self.control_points = dict()
+                for link_name, ctrl_point_list in control_points.items():
+                    self.control_points[link_name] = []
+                    for ctrl_point in ctrl_point_list:
+                        ctrl_pose_link_frame = torch.eye(4, device = self._device, dtype = self._float_dtype)
+                        ctrl_pose_link_frame[:3,3] = torch.tensor(ctrl_point, device = self._device, dtype = self._float_dtype)
+                        self.control_points[link_name].append(ctrl_pose_link_frame)
+                    self.control_points[link_name] = torch.stack(self.control_points[link_name])
+        except FileNotFoundError:
+            print(control_points_json + " was not found")
     
-    def _get_control_points(self, state: torch.Tensor) -> torch.Tensor:
+    def _get_skeleton_interpolated_control_points(self, state: torch.Tensor) -> torch.Tensor:
         
         """
         Receives a robot configuration and returns a list of all control points on the manipulator.
@@ -70,23 +91,48 @@ class CollisionCost(nn.Module):
         
         # Find link locations after stacking robot configuration with gripper state
         augmented_robot_state = torch.cat((state, torch.tile(self._gripper_state, (batch_size, 1))), dim=1)
-        link_transformations = self._differentiable_model.compute_forward_kinematics_all_links(augmented_robot_state)
+        link_transformations = self._differentiable_model.forward_kinematics(augmented_robot_state, end_only=False)
         
         # Initialize skeleton for control points - tensor should be BATCH_SIZE x 1 x 3
         skeleton_control_point_locations = torch.zeros((batch_size, len(self._link_skeleton), 3)).to(self._device)
         
         # Find skeleton control points
         for link_idx in range(len(self._link_skeleton)):
-            skeleton_control_point_locations[:, link_idx, :] = link_transformations[self._link_skeleton[link_idx]][0]
+            skeleton_control_point_locations[:, link_idx, :] = link_transformations[self._link_skeleton[link_idx]].get_matrix()[:, :3, 3]
 
         # Find end effector poses
-        dummy_row = torch.zeros((batch_size, 1, 4)).to(self._device)
-        dummy_row[:, :, 3] = 1.0
-        self.ee_pose = torch.cat((link_transformations[self._link_skeleton[-1]][1], link_transformations[self._link_skeleton[-1]][0].unsqueeze(2)), dim = 2)
-        self.ee_pose = torch.cat((self.ee_pose, dummy_row), dim = 1)
+        self.ee_pose = link_transformations[self._link_skeleton[-1]].get_matrix()
         
         # Augment control points based on the skeleton
         control_point_locations = Functional.interpolate(skeleton_control_point_locations.transpose(1,2), size=self._control_points_number, mode='linear', align_corners=True).transpose(1,2)
+        
+        return control_point_locations
+    
+    def _get_mesh_control_points(self, state: torch.Tensor) -> torch.Tensor:
+        """
+        Receives a robot configuration and returns a list of all control points on the manipulator.
+
+        :param ja_batch: Current joint configuration (BATCH_SIZE x N_STATE)
+        :returns: List of control points on the robot manipulator (BATCH_SIZE x CONTROL_POINTS x 3)
+        """
+        batch_size = state.shape[0]
+
+        # Default gripper state - set to [0.0, 0.0]
+        gripper_state = torch.Tensor([0.0, 0.0, 0.0, 0.0]).to(self._device)
+        num_control_points = sum(map(len, self.control_points.values()))
+
+        # Find link locations after stacking robot configuration with gripper state
+        augmented_robot_state = torch.cat((state, torch.tile(gripper_state, (batch_size, 1))), dim=1)
+        link_transformations = self._differentiable_model.forward_kinematics(augmented_robot_state, end_only=False)
+        # Link transformations is a dict with keys being link names, value is BATCH x 4 x 4
+
+        # Control points tensor should be BATCH x N x 3 where N is the num of control points
+        control_point_locations = torch.zeros((batch_size, num_control_points, 3)).to(device = self._device, dtype = self._float_dtype)
+        idx=0
+        for link_name, ctrl_point_transforms in self.control_points.items():
+            ctrl_point_transforms_base = torch.matmul(link_transformations[link_name].get_matrix().unsqueeze(1).to(device = self._device, dtype = self._float_dtype), ctrl_point_transforms)
+            control_point_locations[:, idx : idx + ctrl_point_transforms.shape[0], :] = ctrl_point_transforms_base[:,:,:3,3]
+            idx += ctrl_point_transforms.shape[0]
         
         return control_point_locations
     
@@ -107,7 +153,10 @@ class CollisionCost(nn.Module):
         """
         
         # Compute robot control point locations through FK for given state
-        robot_control_points = self._get_control_points(state)
+        if self._control_points_json is not None:
+            robot_control_points = self._get_mesh_control_points(state)
+        else:
+            robot_control_points = self._get_skeleton_interpolated_control_points(state)
 
         # Compute grasped object control points
         if grasped_object_grasp_T_object is not None:

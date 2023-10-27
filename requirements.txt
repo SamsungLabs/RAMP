@@ -20,3 +20,8 @@ scikit-learn
 # python -m mppi_planning.trajectory_planning
 # necessary for chamfer distance
 wheel
+
+## for pytorch-kinematics
+pytorch-kinematics
+mujoco
+mujoco-py==0.5.7
