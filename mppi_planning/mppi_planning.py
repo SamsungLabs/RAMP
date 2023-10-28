@@ -310,7 +310,8 @@ class MPPI():
 
         # Compute the state rollout and add the goal at the end
         self.state_rollout = self.get_rollout(self.state, action_rollout)[0]
-        state_rollout = torch.vstack((self.state_rollout, self.goal))
+        state_rollout = torch.vstack((self.state, self.state_rollout))
+        state_rollout = torch.vstack((state_rollout, self.goal))
 
         # Upsample and downsample the trajectory
         interpolated_state_rollout = torch.nn.functional.interpolate(state_rollout.unsqueeze(0).transpose(1,2), size=500, mode='linear', align_corners=True).transpose(1,2).squeeze(0)
