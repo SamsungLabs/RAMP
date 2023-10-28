@@ -441,7 +441,7 @@ class TrajectoryFollower(nn.Module):
         # Define potential field value
         if self._consider_obstacle_collisions:
             # Main potential field definition
-            potential = torch.div(1.0 + 10.0 * attractive_potential, 1.0 + 2.0 * sdf_value)
+            potential = torch.div(1.0 + 10.0 * attractive_potential, 1.0 + 4.0 * sdf_value)
         else:
             # Here the robot does not care about obstacles
             potential = 10.0 * attractive_potential
