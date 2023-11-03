@@ -8,7 +8,6 @@ requirements_default = set(
     ["numpy",
     f"isaacgym @ file://localhost{root_dir}/extern/isaacgym/python", 
     f"csdf @ file://localhost{root_dir}/extern/csdf",
-    f"differentiable_robot_model @ file://localhost{root_dir}/extern/differentiable_robot_model",     
     "KNN-CUDA @ https://github.com/unlimblue/KNN_CUDA/releases/download/0.2/KNN_CUDA-0.2-py3-none-any.whl",
     ]
 )
